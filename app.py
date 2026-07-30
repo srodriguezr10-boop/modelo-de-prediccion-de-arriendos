@@ -10,97 +10,184 @@ import requests
 import streamlit as st
 
 
-# =========================================================
-# CONFIGURACIÓN GENERAL
-# =========================================================
+# ============================================================
+# CONFIGURACIÓN DE LA APLICACIÓN
+# ============================================================
 st.set_page_config(
-    page_title="Predicción con DataRobot",
-    page_icon="🤖",
+    page_title="Estimador de arriendo",
+    page_icon="🏠",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-POLL_INTERVAL_SECONDS = 3
+POLL_INTERVAL_SECONDS = 2
 DEFAULT_TIMEOUT_SECONDS = 600
 
+FEATURE_COLUMNS = [
+    "metros_cuadrados",
+    "habitaciones",
+    "banos",
+    "estrato",
+]
 
-# =========================================================
-# ESTILOS
-# =========================================================
+
+# ============================================================
+# ESTILOS VISUALES
+# ============================================================
 st.markdown(
     """
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 
         html, body, [class*="css"] {
-            font-family: 'Inter', sans-serif;
+            font-family: "Manrope", sans-serif;
         }
 
         .stApp {
             background:
-                radial-gradient(circle at top left, rgba(59, 130, 246, 0.14), transparent 30%),
-                radial-gradient(circle at top right, rgba(139, 92, 246, 0.12), transparent 28%),
+                radial-gradient(circle at 10% 0%, rgba(37, 99, 235, 0.12), transparent 32%),
+                radial-gradient(circle at 95% 5%, rgba(124, 58, 237, 0.12), transparent 30%),
                 #f7f9fc;
         }
 
         .main .block-container {
-            max-width: 1200px;
+            max-width: 1180px;
             padding-top: 2rem;
             padding-bottom: 3rem;
         }
 
         .hero {
             padding: 2.2rem;
-            border-radius: 24px;
-            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 55%, #6d28d9 100%);
+            border-radius: 26px;
+            background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 55%, #6d28d9 100%);
             color: white;
-            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+            box-shadow: 0 22px 55px rgba(15, 23, 42, 0.18);
             margin-bottom: 1.5rem;
         }
 
+        .hero-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.14);
+            border: 1px solid rgba(255,255,255,0.22);
+            border-radius: 999px;
+            padding: 0.38rem 0.8rem;
+            font-size: 0.78rem;
+            font-weight: 700;
+            margin-bottom: 0.9rem;
+        }
+
         .hero h1 {
-            font-size: 2.25rem;
-            line-height: 1.1;
-            margin: 0 0 0.7rem 0;
+            font-size: clamp(2rem, 5vw, 3rem);
+            line-height: 1.05;
+            margin: 0 0 0.8rem 0;
             font-weight: 800;
         }
 
         .hero p {
+            max-width: 760px;
             margin: 0;
             color: rgba(255,255,255,0.84);
-            font-size: 1.02rem;
-            max-width: 760px;
+            font-size: 1rem;
         }
 
-        .info-card {
-            background: rgba(255,255,255,0.92);
-            border: 1px solid rgba(148,163,184,0.25);
-            border-radius: 18px;
-            padding: 1.15rem 1.25rem;
-            box-shadow: 0 8px 30px rgba(15,23,42,0.06);
-            height: 100%;
+        .panel {
+            background: rgba(255,255,255,0.94);
+            border: 1px solid rgba(148,163,184,0.24);
+            border-radius: 22px;
+            padding: 1.35rem;
+            box-shadow: 0 12px 36px rgba(15,23,42,0.07);
         }
 
-        .info-label {
+        .section-title {
+            font-size: 1.18rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 0.25rem;
+        }
+
+        .section-subtitle {
+            color: #64748b;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .result-card {
+            padding: 1.8rem;
+            border-radius: 22px;
+            color: white;
+            background: linear-gradient(135deg, #0f172a 0%, #1e40af 58%, #7c3aed 100%);
+            box-shadow: 0 18px 45px rgba(30,64,175,0.22);
+            text-align: center;
+        }
+
+        .result-label {
+            color: rgba(255,255,255,0.74);
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .result-value {
+            font-size: clamp(2rem, 5vw, 3.4rem);
+            line-height: 1;
+            font-weight: 800;
+            margin: 0.7rem 0;
+        }
+
+        .result-note {
+            color: rgba(255,255,255,0.76);
+            font-size: 0.88rem;
+        }
+
+        .feature-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .feature-label {
             color: #64748b;
             font-size: 0.78rem;
             font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
         }
 
-        .info-value {
+        .feature-value {
             color: #0f172a;
-            font-size: 1.4rem;
+            font-size: 1.35rem;
             font-weight: 800;
-            margin-top: 0.25rem;
+            margin-top: 0.2rem;
         }
 
-        div[data-testid="stFileUploader"] {
-            background: rgba(255,255,255,0.88);
-            border: 1px dashed #93c5fd;
-            border-radius: 18px;
-            padding: 0.5rem;
+        .stButton > button {
+            width: 100%;
+            min-height: 52px;
+            border: none;
+            border-radius: 14px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            box-shadow: 0 10px 24px rgba(37,99,235,0.24);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .stButton > button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 13px 28px rgba(37,99,235,0.3);
+        }
+
+        div[data-testid="stSlider"] {
+            padding-bottom: 0.55rem;
+        }
+
+        div[data-testid="stMetric"] {
+            background: white;
+            border: 1px solid #e2e8f0;
+            padding: 0.9rem;
+            border-radius: 16px;
         }
 
         div[data-testid="stDataFrame"] {
@@ -109,42 +196,11 @@ st.markdown(
             border: 1px solid #e2e8f0;
         }
 
-        .stButton > button,
-        .stDownloadButton > button {
-            border: none;
-            border-radius: 12px;
-            font-weight: 700;
-            min-height: 46px;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
-        }
-
-        .stButton > button {
-            background: linear-gradient(135deg, #2563eb, #7c3aed);
-            color: white;
-            box-shadow: 0 8px 20px rgba(37,99,235,0.22);
-        }
-
-        .stButton > button:hover,
-        .stDownloadButton > button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 24px rgba(37,99,235,0.28);
-        }
-
-        section[data-testid="stSidebar"] {
-            background: #0f172a;
-        }
-
-        section[data-testid="stSidebar"] * {
-            color: #e2e8f0;
-        }
-
-        section[data-testid="stSidebar"] input {
-            color: #0f172a !important;
-        }
-
-        .small-note {
+        .footer-note {
             color: #64748b;
-            font-size: 0.88rem;
+            font-size: 0.82rem;
+            text-align: center;
+            margin-top: 2rem;
         }
     </style>
     """,
@@ -152,11 +208,11 @@ st.markdown(
 )
 
 
-# =========================================================
-# CLASES Y FUNCIONES DE DATAROBOT
-# =========================================================
+# ============================================================
+# CLIENTE DE DATAROBOT
+# ============================================================
 class DataRobotPredictionError(RuntimeError):
-    """Error controlado durante el proceso de predicción."""
+    """Error controlado durante el consumo de la API de DataRobot."""
 
 
 @dataclass(frozen=True)
@@ -178,7 +234,7 @@ class DataRobotBatchClient:
         self.session.headers.update(
             {
                 "Authorization": f"Token {config.api_key}",
-                "User-Agent": "Streamlit-DataRobot-Batch-Prediction-App",
+                "User-Agent": "Streamlit-Rental-Prediction-App",
             }
         )
 
@@ -196,38 +252,36 @@ class DataRobotBatchClient:
             ) from exc
 
         if not response.ok:
-            detail = response.text[:1500]
+            detail = response.text[:1800]
             raise DataRobotPredictionError(
                 f"DataRobot respondió con HTTP {response.status_code}: {detail}"
             )
+
         return response
 
-    def create_job(
-        self,
-        include_all_columns: bool,
-        include_prediction_status: bool,
-        max_explanations: int | None,
-    ) -> dict[str, Any]:
-        payload: dict[str, Any] = {
+    def create_job(self) -> dict[str, Any]:
+        payload = {
             "deploymentId": self.config.deployment_id,
+            "passthroughColumnsSet": "all",
+            "includePredictionStatus": True,
         }
-
-        if include_all_columns:
-            payload["passthroughColumnsSet"] = "all"
-        if include_prediction_status:
-            payload["includePredictionStatus"] = True
-        if max_explanations and max_explanations > 0:
-            payload["maxExplanations"] = max_explanations
-
-        response = self._request("POST", self.config.batch_predictions_url, json=payload)
+        response = self._request(
+            "POST",
+            self.config.batch_predictions_url,
+            json=payload,
+        )
         return response.json()
 
     def upload_csv(self, upload_url: str, csv_bytes: bytes) -> None:
-        headers = {
-            "Content-Type": "text/csv; encoding=utf-8",
-            "Content-Length": str(len(csv_bytes)),
-        }
-        self._request("PUT", upload_url, data=csv_bytes, headers=headers)
+        self._request(
+            "PUT",
+            upload_url,
+            data=csv_bytes,
+            headers={
+                "Content-Type": "text/csv; encoding=utf-8",
+                "Content-Length": str(len(csv_bytes)),
+            },
+        )
 
     def get_job(self, job_url: str) -> dict[str, Any]:
         return self._request("GET", job_url).json()
@@ -235,299 +289,380 @@ class DataRobotBatchClient:
     def download_results(self, download_url: str) -> bytes:
         return self._request("GET", download_url).content
 
-    def abort_job(self, job_id: str) -> None:
-        abort_url = f"{self.config.batch_predictions_url}{job_id}/"
-        try:
-            self._request("DELETE", abort_url)
-        except DataRobotPredictionError:
-            pass
+    def predict(self, input_df: pd.DataFrame) -> pd.DataFrame:
+        csv_bytes = input_df.to_csv(index=False).encode("utf-8")
+        job = self.create_job()
 
-    def predict(
-        self,
-        csv_bytes: bytes,
-        include_all_columns: bool,
-        include_prediction_status: bool,
-        max_explanations: int | None,
-        progress_bar: Any,
-        status_box: Any,
-    ) -> bytes:
-        job = self.create_job(
-            include_all_columns=include_all_columns,
-            include_prediction_status=include_prediction_status,
-            max_explanations=max_explanations,
-        )
+        job_id = job.get("id", "sin-id")
+        links = job.get("links", {})
+        upload_url = links.get("csvUpload")
+        job_url = links.get("self")
 
-        job_id = job["id"]
-        links = job["links"]
-        job_url = links["self"]
+        if not upload_url or not job_url:
+            raise DataRobotPredictionError(
+                "La respuesta de DataRobot no contiene los enlaces requeridos."
+            )
 
-        try:
-            status_box.info("Trabajo creado. Cargando los datos en DataRobot...")
-            progress_bar.progress(5)
-            self.upload_csv(links["csvUpload"], csv_bytes)
-            progress_bar.progress(12)
+        self.upload_csv(upload_url, csv_bytes)
 
-            while True:
-                job = self.get_job(job_url)
-                status = job.get("status", "UNKNOWN")
+        status_placeholder = st.empty()
+        progress_bar = st.progress(0)
 
-                if status == "INITIALIZING":
-                    queue_position = job.get("queuePosition")
-                    message = "DataRobot está preparando el trabajo."
-                    if isinstance(queue_position, int) and queue_position > 0:
-                        message += f" Posición en cola: {queue_position}."
-                    status_box.info(message)
-                    progress_bar.progress(15)
+        started_at = time.time()
 
-                elif status == "RUNNING":
-                    percentage = float(job.get("percentageCompleted", 0))
-                    scored_rows = int(job.get("scoredRows", 0))
-                    failed_rows = int(job.get("failedRows", 0))
-                    visible_progress = min(95, max(15, int(percentage)))
-                    progress_bar.progress(visible_progress)
-                    status_box.info(
-                        f"Procesando predicciones: {percentage:.0f}% · "
-                        f"Filas procesadas: {scored_rows:,} · Errores: {failed_rows:,}"
-                    )
+        while True:
+            if time.time() - started_at > self.config.timeout:
+                raise DataRobotPredictionError(
+                    "La predicción excedió el tiempo máximo de espera."
+                )
 
-                elif status == "COMPLETED":
-                    progress_bar.progress(98)
-                    status_box.info("Predicciones completadas. Descargando resultados...")
-                    final_job = self.get_job(job_url)
-                    result = self.download_results(final_job["links"]["download"])
-                    progress_bar.progress(100)
-                    status_box.success("Predicciones generadas correctamente.")
-                    return result
+            current_job = self.get_job(job_url)
+            status = current_job.get("status", "UNKNOWN")
+            percentage = float(current_job.get("percentageCompleted", 0) or 0)
 
-                elif status in {"FAILED", "ABORTED"}:
-                    details = job.get("statusDetails") or job.get("logs") or "Sin detalles."
+            progress_bar.progress(min(max(int(percentage), 0), 100))
+            status_placeholder.info(
+                f"Procesando predicción · Estado: {status} · Trabajo: {job_id}"
+            )
+
+            if status == "COMPLETED":
+                progress_bar.progress(100)
+                status_placeholder.success("Predicción completada correctamente.")
+                download_url = current_job.get("links", {}).get("download")
+
+                if not download_url:
                     raise DataRobotPredictionError(
-                        f"El trabajo terminó con estado {status}: {details}"
+                        "El trabajo terminó, pero no se encontró el enlace de descarga."
                     )
 
-                else:
-                    raise DataRobotPredictionError(
-                        f"DataRobot devolvió un estado no reconocido: {status}"
-                    )
+                result_bytes = self.download_results(download_url)
+                return pd.read_csv(io.BytesIO(result_bytes))
 
-                time.sleep(POLL_INTERVAL_SECONDS)
+            if status in {"FAILED", "ABORTED"}:
+                details = current_job.get("statusDetails", "Sin detalles adicionales.")
+                raise DataRobotPredictionError(
+                    f"El trabajo terminó con estado {status}: {details}"
+                )
 
-        except Exception:
-            self.abort_job(job_id)
-            raise
+            time.sleep(POLL_INTERVAL_SECONDS)
 
 
-# =========================================================
-# UTILIDADES
-# =========================================================
-def get_secret(name: str, default: str | None = None) -> str:
+# ============================================================
+# FUNCIONES AUXILIARES
+# ============================================================
+def read_secret(name: str, default: str | None = None) -> str:
     try:
         value = st.secrets[name]
     except (KeyError, FileNotFoundError):
-        value = default
-
-    if value is None or not str(value).strip():
+        if default is not None:
+            return default
         raise DataRobotPredictionError(
             f"Falta configurar el secreto '{name}' en Streamlit."
         )
-    return str(value).strip()
+
+    value = str(value).strip()
+    if not value:
+        raise DataRobotPredictionError(
+            f"El secreto '{name}' está vacío."
+        )
+    return value
 
 
-def read_csv_safely(file_bytes: bytes) -> tuple[pd.DataFrame, str]:
-    encodings = ("utf-8", "utf-8-sig", "latin-1")
-    last_error: Exception | None = None
+def get_client() -> DataRobotBatchClient:
+    config = DataRobotConfig(
+        api_key=read_secret("DATAROBOT_API_KEY"),
+        deployment_id=read_secret("DATAROBOT_DEPLOYMENT_ID"),
+        host=read_secret("DATAROBOT_HOST", "https://app.datarobot.com"),
+    )
+    return DataRobotBatchClient(config)
 
-    for encoding in encodings:
-        try:
-            dataframe = pd.read_csv(io.BytesIO(file_bytes), encoding=encoding)
-            return dataframe, encoding
-        except Exception as exc:
-            last_error = exc
+
+def find_prediction_column(result_df: pd.DataFrame) -> str:
+    excluded = set(FEATURE_COLUMNS + ["prediction_status"])
+
+    preferred_exact = [
+        "precio_arriendo_cop_PREDICTION",
+        "precio_arriendo_cop_prediction",
+        "prediction",
+        "PREDICTION",
+    ]
+
+    for column in preferred_exact:
+        if column in result_df.columns:
+            return column
+
+    prediction_columns = [
+        column
+        for column in result_df.columns
+        if "prediction" in column.lower()
+        and "status" not in column.lower()
+        and column not in excluded
+    ]
+
+    if prediction_columns:
+        return prediction_columns[0]
+
+    numeric_candidates = [
+        column
+        for column in result_df.select_dtypes(include="number").columns
+        if column not in excluded
+    ]
+
+    if numeric_candidates:
+        return numeric_candidates[-1]
 
     raise DataRobotPredictionError(
-        f"No fue posible leer el CSV. Verifica el separador, la codificación y su estructura. "
-        f"Detalle: {last_error}"
+        "No fue posible identificar la columna de predicción en la respuesta."
     )
 
 
-def dataframe_from_result(result_bytes: bytes) -> pd.DataFrame | None:
-    try:
-        return pd.read_csv(io.BytesIO(result_bytes))
-    except Exception:
-        return None
+def format_cop(value: float) -> str:
+    return f"${value:,.0f}".replace(",", ".")
 
 
-# =========================================================
-# INTERFAZ
-# =========================================================
+# ============================================================
+# ENCABEZADO
+# ============================================================
 st.markdown(
     """
     <div class="hero">
-        <h1>Predicción inteligente con DataRobot</h1>
+        <div class="hero-badge">MODELO DE MACHINE LEARNING</div>
+        <h1>Estimador de precio de arriendo</h1>
         <p>
-            Carga un archivo CSV, envíalo al modelo desplegado en DataRobot y descarga
-            los resultados de predicción desde una interfaz clara y segura.
+            Ajusta las características del inmueble y consulta el precio mensual
+            estimado por el modelo desplegado en DataRobot.
         </p>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-with st.sidebar:
-    st.title("Configuración")
-    st.caption("Las credenciales se obtienen desde los secretos de Streamlit.")
 
-    include_all_columns = st.checkbox(
-        "Conservar columnas originales",
-        value=True,
-        help="Agrega las columnas del archivo de entrada al resultado final.",
-    )
-    include_prediction_status = st.checkbox(
-        "Incluir estado por fila",
-        value=True,
-        help="Agrega información de errores o estado para cada registro.",
-    )
-    request_explanations = st.checkbox(
-        "Solicitar explicaciones",
-        value=False,
-        help="Puede aumentar el tiempo de procesamiento y depende de la configuración del deployment.",
-    )
-    max_explanations = st.slider(
-        "Número de explicaciones",
-        min_value=1,
-        max_value=10,
-        value=3,
-        disabled=not request_explanations,
-    )
+# ============================================================
+# FORMULARIO DE ENTRADA
+# ============================================================
+left_col, right_col = st.columns([1.18, 0.82], gap="large")
 
-    st.divider()
-    st.markdown("**Secretos requeridos**")
-    st.code(
-        'DATAROBOT_API_KEY = "..."\n'
-        'DATAROBOT_DEPLOYMENT_ID = "..."\n'
-        'DATAROBOT_HOST = "https://app.datarobot.com"',
-        language="toml",
-    )
-
-uploaded_file = st.file_uploader(
-    "Carga el archivo que deseas analizar",
-    type=["csv"],
-    help="El archivo debe contener exactamente las variables esperadas por el deployment.",
-)
-
-if uploaded_file is None:
-    st.info("Carga un archivo CSV para comenzar.")
-    st.stop()
-
-input_bytes = uploaded_file.getvalue()
-
-try:
-    input_df, detected_encoding = read_csv_safely(input_bytes)
-except DataRobotPredictionError as exc:
-    st.error(str(exc))
-    st.stop()
-
-if input_df.empty:
-    st.warning("El archivo está vacío. Agrega al menos una fila de datos.")
-    st.stop()
-
-metric_cols = st.columns(3)
-with metric_cols[0]:
+with left_col:
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
     st.markdown(
-        f'<div class="info-card"><div class="info-label">Registros</div>'
-        f'<div class="info-value">{len(input_df):,}</div></div>',
+        '<div class="section-title">Características del inmueble</div>',
         unsafe_allow_html=True,
     )
-with metric_cols[1]:
     st.markdown(
-        f'<div class="info-card"><div class="info-label">Variables</div>'
-        f'<div class="info-value">{len(input_df.columns):,}</div></div>',
-        unsafe_allow_html=True,
-    )
-with metric_cols[2]:
-    st.markdown(
-        f'<div class="info-card"><div class="info-label">Codificación</div>'
-        f'<div class="info-value">{detected_encoding}</div></div>',
+        '<div class="section-subtitle">Mueve los controles para construir el registro que será enviado al modelo.</div>',
         unsafe_allow_html=True,
     )
 
-st.subheader("Vista previa de los datos")
-st.dataframe(input_df.head(100), use_container_width=True, hide_index=True)
-st.caption(
-    "La vista previa muestra como máximo 100 filas. El archivo completo será enviado a DataRobot."
-)
+    with st.form("prediction_form"):
+        metros_cuadrados = st.slider(
+            "Área del inmueble (m²)",
+            min_value=20,
+            max_value=150,
+            value=75,
+            step=1,
+            help="Área total aproximada del inmueble.",
+        )
 
-with st.expander("Revisar nombres de variables"):
-    st.write(list(input_df.columns))
+        control_col1, control_col2 = st.columns(2)
 
-predict_button = st.button(
-    "Generar predicciones",
-    type="primary",
-    use_container_width=True,
-)
+        with control_col1:
+            habitaciones = st.slider(
+                "Habitaciones",
+                min_value=1,
+                max_value=6,
+                value=3,
+                step=1,
+            )
 
-if predict_button:
+            estrato = st.slider(
+                "Estrato",
+                min_value=1,
+                max_value=6,
+                value=3,
+                step=1,
+            )
+
+        with control_col2:
+            banos = st.slider(
+                "Baños",
+                min_value=1,
+                max_value=5,
+                value=2,
+                step=1,
+            )
+
+            st.number_input(
+                "Valor enviado como área",
+                min_value=20,
+                max_value=150,
+                value=metros_cuadrados,
+                disabled=True,
+                help="Este campo confirma el valor seleccionado en el control de área.",
+            )
+
+        submitted = st.form_submit_button(
+            "Calcular precio estimado",
+            use_container_width=True,
+        )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    input_df = pd.DataFrame(
+        [
+            {
+                "metros_cuadrados": metros_cuadrados,
+                "habitaciones": habitaciones,
+                "banos": banos,
+                "estrato": estrato,
+            }
+        ]
+    )
+
+    st.write("")
+    with st.expander("Ver datos enviados al modelo"):
+        st.dataframe(input_df, use_container_width=True, hide_index=True)
+
+with right_col:
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-title">Resumen del inmueble</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="section-subtitle">Los valores se actualizan con los controles del formulario.</div>',
+        unsafe_allow_html=True,
+    )
+
+    row1_col1, row1_col2 = st.columns(2)
+    row2_col1, row2_col2 = st.columns(2)
+
+    with row1_col1:
+        st.markdown(
+            f"""
+            <div class="feature-card">
+                <div class="feature-label">ÁREA</div>
+                <div class="feature-value">{metros_cuadrados} m²</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with row1_col2:
+        st.markdown(
+            f"""
+            <div class="feature-card">
+                <div class="feature-label">HABITACIONES</div>
+                <div class="feature-value">{habitaciones}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with row2_col1:
+        st.markdown(
+            f"""
+            <div class="feature-card">
+                <div class="feature-label">BAÑOS</div>
+                <div class="feature-value">{banos}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with row2_col2:
+        st.markdown(
+            f"""
+            <div class="feature-card">
+                <div class="feature-label">ESTRATO</div>
+                <div class="feature-value">{estrato}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.write("")
+
+    if "last_prediction" not in st.session_state:
+        st.info(
+            "Configura las características y presiona **Calcular precio estimado**."
+        )
+    else:
+        st.markdown(
+            f"""
+            <div class="result-card">
+                <div class="result-label">Arriendo mensual estimado</div>
+                <div class="result-value">{format_cop(st.session_state.last_prediction)}</div>
+                <div class="result-note">
+                    Valor calculado por el deployment configurado en DataRobot.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ============================================================
+# EJECUCIÓN DE LA PREDICCIÓN
+# ============================================================
+if submitted:
     try:
-        config = DataRobotConfig(
-            api_key=get_secret("DATAROBOT_API_KEY"),
-            deployment_id=get_secret("DATAROBOT_DEPLOYMENT_ID"),
-            host=get_secret("DATAROBOT_HOST", "https://app.datarobot.com"),
+        client = get_client()
+
+        with st.spinner("Enviando datos al modelo..."):
+            result_df = client.predict(input_df)
+
+        prediction_column = find_prediction_column(result_df)
+        prediction_value = pd.to_numeric(
+            result_df.loc[0, prediction_column],
+            errors="coerce",
         )
 
-        # Se normaliza a UTF-8 para evitar problemas de codificación al subirlo.
-        normalized_csv = input_df.to_csv(index=False).encode("utf-8")
+        if pd.isna(prediction_value):
+            raise DataRobotPredictionError(
+                f"La columna '{prediction_column}' no contiene un valor numérico válido."
+            )
 
-        progress_bar = st.progress(0)
-        status_box = st.empty()
-        client = DataRobotBatchClient(config)
-
-        result_bytes = client.predict(
-            csv_bytes=normalized_csv,
-            include_all_columns=include_all_columns,
-            include_prediction_status=include_prediction_status,
-            max_explanations=max_explanations if request_explanations else None,
-            progress_bar=progress_bar,
-            status_box=status_box,
-        )
-
-        st.session_state["prediction_result"] = result_bytes
-        st.session_state["prediction_filename"] = (
-            f"predicciones_{uploaded_file.name.rsplit('.', 1)[0]}.csv"
-        )
+        st.session_state.last_prediction = float(prediction_value)
+        st.session_state.last_result_df = result_df
+        st.rerun()
 
     except DataRobotPredictionError as exc:
         st.error(str(exc))
     except Exception as exc:
         st.error(f"Ocurrió un error inesperado: {exc}")
 
-if "prediction_result" in st.session_state:
-    result_bytes = st.session_state["prediction_result"]
-    result_df = dataframe_from_result(result_bytes)
 
-    st.divider()
-    st.subheader("Resultados del modelo")
-
-    if result_df is not None:
-        result_metrics = st.columns(2)
-        result_metrics[0].metric("Filas resultantes", f"{len(result_df):,}")
-        result_metrics[1].metric("Columnas resultantes", f"{len(result_df.columns):,}")
-        st.dataframe(result_df.head(100), use_container_width=True, hide_index=True)
-    else:
-        st.warning(
-            "Las predicciones se generaron, pero no fue posible mostrar una vista previa. "
-            "Puedes descargar el archivo completo."
+# ============================================================
+# RESULTADO TÉCNICO
+# ============================================================
+if "last_result_df" in st.session_state:
+    st.write("")
+    with st.expander("Ver respuesta completa de DataRobot"):
+        st.dataframe(
+            st.session_state.last_result_df,
+            use_container_width=True,
+            hide_index=True,
         )
 
-    st.download_button(
-        label="Descargar predicciones en CSV",
-        data=result_bytes,
-        file_name=st.session_state.get("prediction_filename", "predicciones.csv"),
-        mime="text/csv",
-        use_container_width=True,
-    )
+        csv_result = st.session_state.last_result_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Descargar resultado CSV",
+            data=csv_result,
+            file_name="prediccion_arriendo.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
 
 st.markdown(
-    '<p class="small-note">La aplicación no muestra ni almacena la API Key. '
-    'Las credenciales se leen directamente desde <code>st.secrets</code>.</p>',
+    """
+    <div class="footer-note">
+        La estimación depende de los datos utilizados para entrenar el modelo.
+        No representa una valoración inmobiliaria oficial.
+    </div>
+    """,
     unsafe_allow_html=True,
 )
